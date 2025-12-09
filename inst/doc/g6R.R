@@ -12,7 +12,6 @@ library(shiny)
 
 ## -----------------------------------------------------------------------------
 nodes <- data.frame(id = 1:10)
-nodes$label <- nodes$id
 
 
 ## -----------------------------------------------------------------------------
@@ -33,6 +32,37 @@ duplicated_id <- which(duplicated(edges$id) == TRUE)
 if (length(duplicated_id)) {
   edges <- edges[-duplicated_id, ]
 }
+
+
+## -----------------------------------------------------------------------------
+as.list(methods("as_g6_data"))
+
+
+## -----------------------------------------------------------------------------
+# Create nodes and edges
+my_nodes <- data.frame(id = c("A", "B"))
+my_edges <- data.frame(source = "A", target = "B")
+
+# Assemble graph data using g6_data()
+graph <- g6_data(
+  nodes = my_nodes,
+  edges = my_edges
+)
+graph
+
+# Or use as_g6_data() directly with a list
+lst <- list(
+  nodes = list(
+    list(id = "A"),
+    list(id = "B")
+  ),
+  edges = list(
+    list(source = "A", target = "B")
+  )
+)
+graph2 <- as_g6_data(lst)
+
+all.equal(graph, graph2)
 
 
 ## ----g6R-json, eval=FALSE, echo = TRUE----------------------------------------

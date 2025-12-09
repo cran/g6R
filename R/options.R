@@ -41,7 +41,8 @@
 #'   the browser's default device pixel ratio will be used.
 #'   Default: NULL.
 #'
-#' @param renderer Rendering engine to use. Options: "canvas", "svg", "webgl", or "webgpu".
+#' @param renderer Rendering engine to use. A JS function. To render
+#' as svg, you can pass `() => new SVGRenderer()`.
 #'   Default: NULL (G6 will choose the appropriate renderer).
 #'
 #' @param padding Padding around the graph content in pixels. Can be a single number for equal padding
@@ -139,6 +140,17 @@ g6_options <- function(
 ) {
   if (!inherits(graph, "g6")) {
     stop("g6_options must be called on a g6 instance")
+  }
+
+  if (!is.null(renderer) && !is_js(renderer)) {
+    stop("'renderer' must be a JavaScript function wrapped with JS()")
+  }
+
+  if ((isTRUE(animation) || is.list(animation)) && get_g6_preserve_position()) {
+    warning(
+      "'g6R.preserve_elements_position' 
+      only works when animation is FALSE. It will be ignored."
+    )
   }
 
   cursor <- match.arg(cursor)

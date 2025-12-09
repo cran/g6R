@@ -2,10 +2,7 @@ library(shiny)
 library(bslib)
 library(g6R)
 
-nodes <- data.frame(
-  id = 1:100,
-  label = 1:100
-)
+nodes <- data.frame(id = 1:100)
 
 # Set a seed for reproducibility
 set.seed(123)
@@ -35,7 +32,7 @@ server <- function(input, output, session) {
   output$graph <- renderG6({
     g6(nodes, edges) |>
       g6_options(
-        animation = FALSE,
+        autoFit = "view",
         node = list(
           style = list(
             labelBackground = TRUE,
@@ -45,25 +42,22 @@ server <- function(input, output, session) {
             labelPadding = c(0, 4),
             labelText = JS(
               "(d) => {
-              return d.id
-            }"
+                return d.id
+              }"
             )
           )
         )
       ) |>
-      g6_layout(
-        layout = d3_force_layout()
-      ) |>
+      g6_layout() |>
       g6_behaviors(
         "zoom-canvas",
-        drag_element_force(fixed = TRUE),
+        drag_element_force(),
         click_select(multiple = TRUE),
         brush_select(),
         create_edge()
       ) |>
       g6_plugins(
         "minimap",
-        "tooltip",
         context_menu()
       )
   })
@@ -72,9 +66,9 @@ server <- function(input, output, session) {
     g6_proxy("graph") |>
       g6_add_plugin(
         hull(
+          members = sample(nodes$id, 10),
           fill = "#F08F56",
           stroke = "#F08F56",
-          members = sample(nodes$id, 10),
           labelText = "hull-a",
           labelPlacement = "top",
           labelBackground = TRUE,

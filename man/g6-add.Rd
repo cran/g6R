@@ -7,22 +7,24 @@
 \alias{g6_add_data}
 \title{Add nodes/edges/combos to a g6 graph via proxy}
 \usage{
-g6_add_nodes(graph, nodes)
+g6_add_nodes(graph, ...)
 
-g6_add_edges(graph, edges)
+g6_add_edges(graph, ...)
 
-g6_add_combos(graph, combos)
+g6_add_combos(graph, ...)
 
 g6_add_data(graph, data)
 }
 \arguments{
 \item{graph}{A g6_proxy object created with \code{\link{g6_proxy}}.}
 
-\item{nodes, edges, combos}{A data frame or list specifying the elements to be added.
-Elements structure must be compliant with specifications listed at
-\url{https://g6.antv.antgroup.com/manual/element/overview}}
+\item{...}{Nodes or edges or combos. You can pass a list of nodes/edges/combos, a dataframe
+or leverage the g6_nodes(), g6_edges() or g6_combos() helpers or pass individual elements like
+g6_node(), g6_edge() or g6_combo(). Elements structure must be compliant with specifications listed at
+\url{https://g6.antv.antgroup.com/manual/element/overview}.}
 
-\item{data}{A nested list possibly containing nodes, edges and combo data.}
+\item{data}{A nested list possibly containing nodes, edges and combo data. Can also be
+created with the \code{\link{g6_data}} helper.}
 }
 \value{
 The g6_proxy object (invisibly), allowing for method chaining.
@@ -40,6 +42,38 @@ If a node with the same ID already exists, it will not be added again.
 See \url{https://g6.antv.antgroup.com/en/api/data#graphaddnodedata},
 \url{https://g6.antv.antgroup.com/en/api/data#graphaddedgedata} and
 \url{https://g6.antv.antgroup.com/en/api/data#graphaddcombodata} for more details.
+}
+\examples{
+if (interactive()) {
+  library(shiny)
+  library(g6R)
+  library(bslib)
+
+  # Static data defined globally
+  nodes <- data.frame(id = 1:3)
+  edges <- data.frame(source = c(1, 2), target = c(2, 3))
+
+  ui <- page_fluid(
+    title = "Add Nodes Dynamically",
+    g6_output("graph"),
+    actionButton("add_node", "Add Node")
+  )
+
+  server <- function(input, output, session) {
+    output$graph <- render_g6({
+      g6(nodes = nodes, edges = edges) |> g6_layout()
+    })
+
+    next_id <- reactiveVal(max(nodes$id) + 1)
+
+    observeEvent(input$add_node, {
+      g6_add_nodes(g6_proxy("graph"), data.frame(id = next_id()))
+      next_id(next_id() + 1)
+    })
+  }
+
+  shinyApp(ui, server)
+}
 }
 \seealso{
 \code{\link{g6_proxy}}, \code{\link{g6_remove_nodes}}

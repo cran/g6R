@@ -229,6 +229,11 @@ auto_adapt_label <- function(
 #' @param style Style specification for the selection box (list).
 #' See \url{https://g6.antv.antgroup.com/en/manual/behavior/brush-select#style}.
 #' @param trigger Shortcut keys for selection (character vector).
+#' @param outputId Manually pass the Shiny output ID. This is useful when the graph
+#' is initialised outside the shiny render function and the ID cannot be automatically
+#' inferred. This allows to set input values from the callback function
+#' with the right namespace and graph ID. You must typically pass `session$ns("graphid")`
+#' to ensure this also works in modules.
 #' @param ... Extra parameters. See \url{https://g6.antv.antgroup.com/en/manual/behavior/brush-select}.
 #'
 #' @return A list with the configuration settings for the brush select behavior.
@@ -256,7 +261,7 @@ brush_select <- function(
   animation = FALSE,
   enable = JS(
     "(e) => {
-      return true
+      return true;
     }"
   ),
   enableElements = "node",
@@ -266,6 +271,7 @@ brush_select <- function(
   state = c("selected", "active", "inactive", "disabled", "highlight"),
   style = NULL,
   trigger = "shift",
+  outputId = NULL,
   ...
 ) {
   # Validate inputs
@@ -308,22 +314,36 @@ brush_select <- function(
 
   # We can't access the graph instance from within this JS
   # code as it is create oustide the widget factory
-  output_id <- shiny::getCurrentOutputInfo()[["name"]]
+  if (is.null(config$outputId)) {
+    config$outputId <- shiny::getCurrentOutputInfo()[["name"]]
+  }
 
   # Provide default for onSelect for Shiny context
-  if (is.null(config$onSelect) && !is.null(output_id)) {
+  if (is.null(config$onSelect) && !is.null(config$outputId)) {
     config$onSelect <- JS(
       sprintf(
         "(states) => {
-          const selectedNodes = Object.getOwnPropertyNames(states);
-          Shiny.setInputValue(
-            '%s-selected_node',
-            selectedNodes,
-            {priority: 'event'}
-          );
+          const selected = Object.getOwnPropertyNames(states);
+          const nodes = [];
+          const edges = [];
+          const combos = [];
+          const widget = HTMLWidgets.find('#%s').getWidget();
+          if (selected.length === 0) return states;
+          selected.forEach(id => {
+            const type = widget.getElementType(id);
+            if (type === 'node') nodes.push(id);
+            else if (type === 'edge') edges.push(id);
+            else if (type === 'combo') combos.push(id);
+          });
+          Shiny.setInputValue('%s-selected_node:g6R.brush_select', nodes, {priority: 'event'});
+          Shiny.setInputValue('%s-selected_edge:g6R.brush_select', edges, {priority: 'event'});
+          Shiny.setInputValue('%s-selected_combo:g6R.brush_select', combos, {priority: 'event'});
           return states;
         }",
-        output_id
+        config$outputId,
+        config$outputId,
+        config$outputId,
+        config$outputId
       )
     )
   }
@@ -366,6 +386,50 @@ brush_select <- function(
 #'   unselectedState = "inactive",
 #'   trigger = c("Control")
 #' )
+#'
+#' # Example leveraging the input[["<GRAPH_ID>-selected_<ELEMENT_TYPE>"]]
+#' if (interactive()) {
+#'   library(shiny)
+#'   library(g6R)
+#'   library(bslib)
+#'
+#'   nodes <- data.frame(id = c("node1", "node2"))
+#'   edges <- data.frame(source = "node1", target = "node2")
+#'   combos <- data.frame(id = "combo1", type = "rect")
+#'
+#'   ui <- page_fluid(
+#'     g6_output("graph"),
+#'     verbatimTextOutput("selected_elements")
+#'   )
+#'
+#'   server <- function(input, output, session) {
+#'     output$graph <- render_g6({
+#'       g6(
+#'         nodes = nodes,
+#'         edges = edges,
+#'         combos = combos
+#'       ) |>
+#'         g6_layout() |>
+#'         g6_behaviors(
+#'           click_select(multiple = TRUE),
+#'           brush_select(
+#'             enableElements = c("node", "edge", "combo"),
+#'             immediately = TRUE
+#'           )
+#'         )
+#'     })
+#'
+#'     output$selected_elements <- renderPrint({
+#'       list(
+#'         selected_nodes = input[["graph-selected_node"]],
+#'         selected_edges = input[["graph-selected_edge"]],
+#'         selected_combos = input[["graph-selected_combo"]]
+#'       )
+#'     })
+#'   }
+#'
+#'   shinyApp(ui, server)
+#' }
 click_select <- function(
   key = "click-select",
   animation = TRUE,
@@ -508,6 +572,11 @@ collapse_expand <- function(
 #' creation is succesful so that it does not conflict with other drag behaviors.
 #' @param style Style of the newly created edge (list, default: NULL).
 #' @param notify Whether to show a feedback message in the ui.
+#' @param outputId Manually pass the Shiny output ID. This is useful when the graph
+#' is initialised outside the shiny render function and the ID cannot be automatically
+#' inferred. This allows to set input values from the callback function
+#' with the right namespace and graph ID. You must typically pass `session$ns("graphid")`
+#' to ensure this also works in modules.
 #' @param ... Extra parameters. See \url{https://g6.antv.antgroup.com/en/manual/behavior/create-edge}.
 #'
 #' @note \link{create_edge}, \link{drag_element} and \link{drag_element_force} are incompatible by default,
@@ -519,6 +588,88 @@ collapse_expand <- function(
 #' @examples
 #' # Basic configuration
 #' config <- create_edge()
+#' if (interactive()) {
+#'   library(shiny)
+#'   library(bslib)
+#'   library(g6R)
+#'
+#'   nodes <- list(
+#'     list(
+#'       id = "node1"
+#'     ),
+#'     list(
+#'       id = "node2"
+#'     )
+#'   )
+#'
+#'   modUI <- function(id) {
+#'     ns <- NS(id)
+#'     tagList(
+#'       g6Output(ns("graph"))
+#'     )
+#'   }
+#'
+#'   modServer <- function(id) {
+#'     moduleServer(id, function(input, output, session) {
+#'       output$graph <- renderG6({
+#'         g6(nodes) |>
+#'           g6_options(
+#'             animation = FALSE,
+#'             edge = edge_options(
+#'               style = list(
+#'                 endArrow = TRUE
+#'               )
+#'             )
+#'           ) |>
+#'           g6_layout(d3_force_layout()) |>
+#'           g6_behaviors(
+#'             # avoid conflict with internal function
+#'             g6R::create_edge(
+#'               target = c("node", "combo", "canvas"),
+#'               enable = JS(
+#'                 "(e) => {
+#'                   return e.shiftKey;
+#'                 }"
+#'               ),
+#'               onFinish = JS(
+#'                 sprintf(
+#'                   "(edge) => {
+#'                     const graph = HTMLWidgets.find('#%s').getWidget();
+#'                     const targetType = graph.getElementType(edge.target);
+#'                     // Avoid to create edges in combos. If so, we remove it
+#'                     if (targetType === 'combo') {
+#'                       graph.removeEdgeData([edge.id]);
+#'                       return;
+#'                     }
+#'                     Shiny.setInputValue('%s', edge);
+#'                   }",
+#'                   session$ns("graph"),
+#'                   session$ns("added_edge")
+#'                 )
+#'               )
+#'             )
+#'           )
+#'       })
+#'
+#'       observeEvent(input[["added_edge"]], {
+#'         showNotification(
+#'           sprintf("Edge dropped on: %s", input[["added_edge"]]$targetType),
+#'           type = "message"
+#'         )
+#'       })
+#'     })
+#'   }
+#'
+#'   ui <- page_fluid(
+#'     modUI("test")
+#'   )
+#'
+#'   server <- function(input, output, session) {
+#'     modServer("test")
+#'   }
+#'
+#'   shinyApp(ui, server)
+#' }
 create_edge <- function(
   key = "create-edge",
   trigger = "drag",
@@ -527,6 +678,7 @@ create_edge <- function(
   onFinish = NULL,
   style = NULL,
   notify = FALSE,
+  outputId = NULL,
   ...
 ) {
   # Validate inputs
@@ -559,10 +711,12 @@ create_edge <- function(
 
   # We can't access the graph instance from within this JS
   # code as it is create oustide the widget factory
-  output_id <- shiny::getCurrentOutputInfo()[["name"]]
+  if (is.null(config$outputId)) {
+    config$outputId <- shiny::getCurrentOutputInfo()[["name"]]
+  }
 
   # Provide default in Shiny context only
-  if (is.null(config$onFinish) && !is.null(output_id)) {
+  if (is.null(config$onFinish) && !is.null(config$outputId)) {
     config$onFinish <- JS(
       sprintf(
         "(edge) => {
@@ -600,7 +754,7 @@ create_edge <- function(
           }
         }",
         as.numeric(notify),
-        output_id
+        config$outputId
       )
     )
   }
@@ -1174,6 +1328,11 @@ hover_activate <- function(
 #' @param state State to switch to when selected (string, default: "selected").
 #' @param style Style of the lasso during selection (list, default: NULL).
 #' @param trigger Press this shortcut key along with mouse click to select (character vector, default: c("shift")).
+#' @param outputId Manually pass the Shiny output ID. This is useful when the graph
+#' is initialised outside the shiny render function and the ID cannot be automatically
+#' inferred. This allows to set input values from the callback function
+#' with the right namespace and graph ID. You must typically pass `session$ns("graphid")`
+#' to ensure this also works in modules.
 #' @param ... Extra parameters. See \url{https://g6.antv.antgroup.com/en/manual/behavior/lasso-select}.
 #'
 #' @return A list with the configuration settings for the lasso-select behavior.
@@ -1208,6 +1367,7 @@ lasso_select <- function(
   state = "selected",
   style = NULL,
   trigger = c("shift"),
+  outputId = NULL,
   ...
 ) {
   # Validate inputs
@@ -1264,21 +1424,35 @@ lasso_select <- function(
   }
 
   # Recover output id in Shiny context
-  output_id <- shiny::getCurrentOutputInfo()[["name"]]
+  if (is.null(config$outputId)) {
+    config$outputId <- shiny::getCurrentOutputInfo()[["name"]]
+  }
 
-  if (is.null(config$onSelect) && !is.null(output_id)) {
+  if (is.null(config$onSelect) && !is.null(config$outputId)) {
     config$onSelect <- JS(
       sprintf(
         "(states) => {
-          const selectedNodes = Object.getOwnPropertyNames(states);
-          Shiny.setInputValue(
-            'graph-selected_node',
-            selectedNodes,
-            {priority: 'event'}
-          );
+          const selected = Object.getOwnPropertyNames(states);
+          const nodes = [];
+          const edges = [];
+          const combos = [];
+          const widget = HTMLWidgets.find('#%s').getWidget();
+          if (selected.length === 0) return states;
+          selected.forEach(id => {
+            const type = widget.getElementType(id);
+            if (type === 'node') nodes.push(id);
+            else if (type === 'edge') edges.push(id);
+            else if (type === 'combo') combos.push(id);
+          });
+          Shiny.setInputValue('%s-selected_node:g6R.lasso_select', nodes, {priority: 'event'});
+          Shiny.setInputValue('%s-selected_edge:g6R.lasso_select', edges, {priority: 'event'});
+          Shiny.setInputValue('%s-selected_combo:g6R.lasso_select', combos, {priority: 'event'});
           return states;
         }",
-        output_id
+        config$outputId,
+        config$outputId,
+        config$outputId,
+        config$outputId
       )
     )
   }

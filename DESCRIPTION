@@ -1,6 +1,6 @@
 Package: g6R
 Title: Graph Visualisation Engine Widget for R and 'shiny' Apps
-Version: 0.1.0
+Version: 0.5.0
 Authors@R: 
     c(
     person("David", "Granjon", , "dgranjon@ymail.com", role = c("aut", "cre")),
@@ -18,7 +18,7 @@ Description: Create stunning network experiences powered by the 'G6' graph visua
     options for nodes, edges and more.
 License: MIT + file LICENSE
 Encoding: UTF-8
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 URL: https://github.com/cynkra/g6R, https://cynkra.github.io/g6R/
 BugReports: https://github.com/cynkra/g6R/issues
 Imports: htmlwidgets, shiny
@@ -29,11 +29,11 @@ Depends: R (>= 4.1.0)
 LazyData: true
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2025-07-07 14:24:23 UTC; davidgranjon
+Packaged: 2025-12-09 10:56:28 UTC; davidgranjon
 Author: David Granjon [aut, cre],
   David Schoch [aut],
   cynkra GmbH [fnd],
   Bristol Myers Squibb [fnd]
 Maintainer: David Granjon <dgranjon@ymail.com>
 Repository: CRAN
-Date/Publication: 2025-07-10 15:10:02 UTC
+Date/Publication: 2025-12-09 11:10:02 UTC

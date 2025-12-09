@@ -1,6 +1,7 @@
 #' @keywords internal
-dropNulls <- function(x) {
-  x[!vapply(x, is.null, FUN.VALUE = logical(1))]
+dropNulls <- function(x, except = character()) {
+  keep <- !vapply(x, is.null, logical(1)) | names(x) %in% except
+  x[keep]
 }
 
 #' Marks as string to be processed as a JS function
@@ -62,4 +63,18 @@ validate_component <- function(x, mode) {
     }
   }
   x
+}
+
+lgl_ply <- function(x, fun, ..., length = 1L, use_names = FALSE) {
+  vapply(x, fun, logical(length), ..., USE.NAMES = use_names)
+}
+
+# Used in zzz.R to register input handlers
+register_selection_handler <- function(type) {
+  shiny::registerInputHandler(paste0("g6R.", type), function(data, ...) {
+    if (!length(data)) return(NULL)
+    data <- unlist(data)
+    attr(data, "eventType") <- type
+    data
+  }, force = TRUE)
 }

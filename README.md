@@ -10,6 +10,8 @@
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/g6R)](https://CRAN.R-project.org/package=g6R)
+[![Codecov test
+coverage](https://codecov.io/gh/cynkra/g6R/graph/badge.svg)](https://app.codecov.io/gh/cynkra/g6R)
 <!-- badges: end -->
 
 <p style="text-align: center;">
@@ -56,10 +58,7 @@ To create a `{g6R}` graph:
 
 ``` r
 library(g6R)
-nodes <- data.frame(
-  id = 1:10,
-  label = 1:10
-)
+nodes <- data.frame(id = 1:10)
 
 # Generate random edges
 edges <- data.frame(
