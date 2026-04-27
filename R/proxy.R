@@ -55,7 +55,7 @@ g6_data_proxy <- function(graph, el, action, type) {
     sprintf("%s_g6-data", graph$id),
     list(
       el = el,
-      action = action, 
+      action = action,
       type = type,
       layout = get_g6_layout_on_data_change()
     )
@@ -1271,4 +1271,191 @@ g6_set_theme <- function(graph, theme) {
     list(theme = theme)
   )
   graph
+}
+
+#' @keywords internal
+prefix_port_key <- function(key, nid) {
+  prefix <- paste0(nid, "-")
+  ifelse(startsWith(key, prefix), key, paste0(prefix, key))
+}
+
+#' Update ports for one or more nodes in a g6 graph via proxy
+#'
+#' This function sends a message to the client
+#' to update (add, remove, or modify) ports
+#' for one or more nodes. The actual update is handled
+#' on the JS side.
+#'
+#' Removing a port that is currently used by an edge
+#' removes the edge as well. Conversely, removing an edge
+#' does not remove the ports it was using.
+#'
+#' @param graph A g6_proxy object.
+#' @param ops A named list of operations, one entry per node (named by node ID).
+#' Each entry can contain:
+#'   \itemize{
+#'     \item \code{add}: a list of port objects to add.
+#'     \item \code{remove}: a character vector of port keys to remove
+#'     \item \code{update}: a list of port objects (with key) to update
+#'   }
+#' @return The g6_proxy object.
+#' @export
+#' @examples
+#' if (interactive()) {
+#'   library(shiny)
+#'   library(g6R)
+#'
+#'   ui <- fluidPage(
+#'     g6_output("graph", height = "500px"),
+#'     actionButton("update_ports", "Update Ports")
+#'   )
+#'
+#'   server <- function(input, output, session) {
+#'     output$graph <- render_g6({
+#'       g6(
+#'         nodes = g6_nodes(
+#'           g6_node(
+#'             id = "A",
+#'             type = "custom-rect-node",
+#'             ports = g6_ports(
+#'               g6_input_port(key = "in1", label = "in1", placement = "left"),
+#'               g6_output_port(key = "out1", label = "out1", placement = "right"),
+#'               g6_output_port(key = "out2", label = "out2", placement = c(1, 1))
+#'             ),
+#'             style = list(x = 100, y = 200, labelText = "Node A")
+#'           ),
+#'           g6_node(
+#'             id = "B",
+#'             type = "custom-rect-node",
+#'             ports = g6_ports(
+#'               g6_input_port(key = "in2", label = "in2", placement = "left"),
+#'               g6_output_port(key = "out3", label = "out3", placement = "right"),
+#'               g6_output_port(key = "out4", label = "out4", placement = c(1, 0))
+#'             ),
+#'             style = list(x = 300, y = 200, labelText = "Node B")
+#'           )
+#'         ),
+#'         edges = g6_edges(
+#'           g6_edge(source = "A", target = "B", style = list(sourcePort = "out1", targetPort = "in2"))
+#'         )
+#'       ) |> g6_behaviors(click_select(), drag_element(), drag_canvas())
+#'     })
+#'
+#'     observeEvent(input$update_ports, {
+#'       g6_update_ports(
+#'         g6_proxy("graph"),
+#'         list(
+#'           A = list(remove = c("out1", "out2")),
+#'           B = list(
+#'             add = list(g6_port(key = "new", label = "new", placement = "top")),
+#'             update = list(g6_port(key = "in2", label = "Updated label"))
+#'           )
+#'         )
+#'       )
+#'     })
+#'   }
+#'
+#'   shinyApp(ui, server)
+#' }
+g6_update_ports <- function(graph, ops) {
+  if (!is.list(ops) || is.null(names(ops))) {
+    stop("'ops' must be a named list with node IDs as names.")
+  }
+
+  ids <- names(ops)
+
+  if (anyDuplicated(ids)) {
+    stop(
+      "Duplicate node IDs in 'ops': ",
+      paste(unique(ids[duplicated(ids)]), collapse = ", ")
+    )
+  }
+
+  for (nid in ids) {
+    node_ops <- ops[[nid]]
+
+    # Coerce, validate, and prefix add
+    if (length(node_ops$add)) {
+      ports <- as_g6_ports(node_ops$add)
+      for (i in seq_along(ports)) {
+        ports[[i]]$key <- prefix_port_key(ports[[i]]$key, nid)
+      }
+      ops[[nid]]$add <- ports
+    }
+
+    # Coerce, validate, and prefix update
+    if (length(node_ops$update)) {
+      ports <- as_g6_ports(node_ops$update)
+      for (i in seq_along(ports)) {
+        ports[[i]]$key <- prefix_port_key(ports[[i]]$key, nid)
+      }
+      ops[[nid]]$update <- ports
+    }
+
+    # Validate and prefix remove
+    if (length(node_ops$remove)) {
+      if (!is.character(node_ops$remove)) {
+        stop(sprintf(
+          "For node '%s', 'remove' must be a character vector of port keys",
+          nid
+        ))
+      }
+      ops[[nid]]$remove <- prefix_port_key(node_ops$remove, nid)
+    }
+  }
+
+  graph$session$sendCustomMessage(
+    sprintf("%s_g6-update-ports", graph$id),
+    list(ids = ids, ops = ops)
+  )
+  graph
+}
+
+#' Extract ports from a g6 graph state via proxy
+#'
+#' These helpers extract ports from the graph state stored in Shiny input,
+#' accessed via a g6_proxy object. Ports are grouped by node and can be filtered by type.
+#'
+#' @param graph A g6_proxy object.
+#' @return A named list of ports for each node, optionally filtered by type.
+#'
+#' @rdname get-ports
+#' @export
+g6_get_ports <- function(graph) {
+  stopifnot(inherits(graph, "g6_proxy"))
+  ns_prefix <- graph$session$ns("")
+  id <- graph$id
+  if (!is.null(ns_prefix) && nzchar(ns_prefix)) {
+    # Remove namespace prefix if present
+    if (startsWith(id, ns_prefix)) {
+      id <- sub(paste0("^", ns_prefix), "", id)
+    }
+  }
+  state <- graph$session$input[[sprintf("%s-state", id)]]
+  nodes <- state$nodes
+  if (is.null(nodes)) {
+    return(list())
+  }
+  ports <- lapply(nodes, function(node) node$style$ports)
+  ports[!vapply(ports, is.null, logical(1))]
+}
+
+g6_get_type_ports <- function(graph, type = c("input", "output")) {
+  type <- match.arg(type)
+  all_ports <- g6_get_ports(graph)
+  lapply(all_ports, function(port_list) {
+    Filter(function(port) identical(port$type, type), port_list)
+  })
+}
+
+#' @rdname get-ports
+#' @export
+g6_get_input_ports <- function(graph) {
+  g6_get_type_ports(graph, "input")
+}
+
+#' @rdname get-ports
+#' @export
+g6_get_output_ports <- function(graph) {
+  g6_get_type_ports(graph, "output")
 }

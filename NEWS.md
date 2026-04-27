@@ -1,3 +1,73 @@
+# g6R 0.6.0.9000
+
+## Breaking changes
+
+- Not a g6R change but `{bslib}` recently introduced the `toolbar()` function which unfortunately overlaps with the `{g6R}` one. From now, you'll have to use `g6R::toolbar()` to avoid conflicts. In later releases, we'll provide more prefixed functions like `g6_toolbar`.
+
+## New feature
+
+- Added better port support for nodes __ports__:
+  - To enable it, you must pass a custom type to `g6_node()` such as `custom-circle-node`, `custom-rect-node` (We support 9 [shapes](https://g6.antv.antgroup.com/en/manual/element/node/overview#built-in-nodes), except HTML which does not handle port in the g6 library)
+  - `g6_node()` get a new `ports` argument to define ports for each node. In the g6 JS library, ports are normally defined inside `style` but we consider they are too important to be hidden there. Now you can define ports directly in the node data, g6R automatically moves them to `style.ports` when rendering the graph.
+  - New `g6_port()` function to create ports easily and wrap them inside `g6_ports()`. A port has a unique __key__, an __arity__ that is the number of connections it can make or take and other style parameters inherited from [g6](https://g6.antv.antgroup.com/en/manual/element/node/base-node#portstyleprops). When giving a key to a port, don't worry if key names collide between nodes, g6R automatically makes them unique by prefixing them with the node ID on the JS side.
+  - 2 kind of ports have been designed:
+    - __input__ ports (`g6_input_port()`): they can only be the target of an edge.
+    - __output__ ports (`g6_output_port()`): they can only be the source of an edge.
+  - When creating edges, if you provide `sourcePort` and/or `targetPort` within the `style` list, the edge will be connected to the corresponding ports. Validation is made so we don't connect incompatible ports (e.g. connecting an output port to another output port) or connecting a port to itself.
+  - `create_edge()` behavior was improved to work better with ports. For instance, you can't drag from a port that is already at its arity limit.
+  You can't drag from a node if it has ports (drag from the ports instead).
+  - Ports gain a `label` parameter to display text on the port.
+  - In a Shiny context, `showGuides` allows to display connection __guides__ when hovering over a port. Combined with `input[["<GRAPH_ID>-selected_port"]]` and `input[["<graph_ID>-mouse_position"]]`, this allows to add and connect nodes on the fly at the guide location.
+  - Use `g6_update_ports()` to update port (3 possible actions: remove/add/update) ports of existing nodes.
+  - Use `g6_get_ports()` to get the ports of existing nodes. Specifically, you can call `g6_get_input_ports()` and `g6_get_output_ports()` to get only input or output ports respectively. This are only convenience functions.
+
+- Added new `collapse` parameter to nodes. This will only work if you use any of the `custom-*-node` node types (see below). Now if a node has `children` (vector of character node IDs), it can be collapsed or uncollapsed. `collapse` accepts a list of options via `g6_collapse_options()`. When a node has `children` set (character vector/list of node IDs expected),
+an option `g6R.directed_graph` is set to TRUE so that, when a connection is created between 2 nodes, we automatically establish parent/child relation and inversely when an edge or node is removed. You can also manually opt-in for this setup by setting `options(g6R.directed_graph = TRUE)`. Importantly, the parent/child relations are only maintained if you use the g6R proxy functions. Using the direct JS G6 API yourself (like with `graph.removeEdgeData(...)` won't do anything to keep the tree state in sync! The `set_g6_max_collapse_depth()` option controls which nodes display a collapse button based on their depth in the graph. Only nodes at depth `<= maxCollapseDepth` show collapse buttons. Defaults to `Inf` (all nodes with children are collapsible). Set to `0` to restrict collapsing to root nodes only. Set to `-1` to disable collapsing entirely (collapse buttons are removed even when `g6_collapse_options()` is provided and nodes have children).
+
+```r
+g6_node(
+  id = 1,
+  type = "custom-rect-node", # to enable use custom class
+  children = c(2, 3),
+  collapse = g6_collapse_options(collapsed = TRUE)
+)
+```
+
+- Added new `collapse` parameter to `g6_combo()`. Accepts `g6_collapse_options()` just like nodes. When `collapse` is provided and `type` is NULL, the combo type is automatically set to `"rect-combo-with-extra-button"`. The combo collapse button now supports all the same configuration as nodes: configurable `placement`, `r`, `fill`, `stroke`, `iconStroke`, `visibility` (including `"hover"` mode), etc.
+
+```r
+g6_combo(
+  "combo1",
+  collapse = g6_collapse_options(
+    placement = "bottom",
+    fill = "#f0f0f0",
+    visibility = "hover"
+  )
+)
+```
+
+- `bubble_sets()` and `hull()` now automatically set `pointerEvents = "none"` and `zIndex = -1` by default. This fixes two issues when using the SVG renderer: overlay shapes no longer block pointer events (drag, click) on nodes, and they render behind nodes so they don't visually cover collapse buttons or other node UI. These defaults can be overridden by passing explicit values.
+
+- Overlay plugins (`bubble_sets()`, `hull()`) now resize dynamically when nodes are collapsed or uncollapsed. Hidden members are temporarily removed from the overlay shape and restored when expanded again.
+
+- New `rect-combo-with-extra-button` combo type, the rectangular counterpart of `circle-combo-with-extra-button`.
+
+- Graph now uses `ResizeObserver` to detect container size changes (e.g. from DOM reparenting, panel resize, CSS visibility toggles) instead of relying solely on `window` resize events. The `window` resize listener is kept as a fallback.
+
+## Bug fixes
+
+- Fixed `hull()` label not displaying: the default `labelMaxWidth` was `0`, which caused G6 to ellipsize the label to zero width. Changed default to `NULL` (consistent with `bubble_sets()`).
+
+- Fixed port `+` indicators incorrectly showing on at-capacity ports during node selection or drag. G6's internal `setVisibility()` call during update was making all child shapes visible, and the cleanup was skipped when the cursor was hovering the node. Now the capacity-aware port logic is re-applied during updates while hovering.
+
+- Fixed ports with `visibility = "hover"` or `"hidden"` leaking as visible on the initial render. G6's `BaseShape` constructor calls `setVisibility()` after `render()`, which recursively cascades the node's visibility to every child shape (including port circles and indicators), overriding the per-port visibility mode. The correction now also runs on initial creation via a `setVisibility()` override, not just on subsequent updates. Additionally, the edge-created listener no longer force-calls `showPorts` on non-hovered nodes, so the `+` indicator no longer leaks onto nodes the user isn't actually hovering after initial edges load (cynkra/blockr.dag#107).
+
+- Improvements to how `drag_element()` and `drag_element_force()` work with `create_edge()`. Now, the `create_edge()` can be `drag` and work with `drag_element()` as we handle the behavior conflicts/priorities JS side.
+
+- `input[["<graph_ID>-state"]]` now does not return unnamed lists for nodes, edges and combos. Instead, each sublist is named with the corresponding element IDs. This makes it easier to retrieve the state of a specific element when we know the ID.
+
+- Fixed `tooltips()` plugin being invisible inside a `{bslib}` / Bootstrap page. G6's tooltip container is rendered with `class="tooltip"`, which collides with Bootstrap's own `.tooltip { opacity: 0 }` rule. The widget now ships a small CSS reset, scoped to `.html-widget.g6 .tooltip`, that restores `opacity: 1` without affecting Bootstrap tooltips elsewhere on the page.
+
 # g6R 0.5.0
 
 ## Potential breaking changes

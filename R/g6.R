@@ -20,6 +20,7 @@
 #'   \item \code{style}: List of style attributes (color, size, etc.).
 #'   \item \code{states}: String. Initial states for the node, such as selected, active, hover, etc.
 #'   \item \code{combo}: ID of the combo this node belongs to.
+#'   \item \code{ports}: Node ports. Can also be passed inside the style field.
 #' }}
 #'
 #' \subsection{Edges}{
@@ -121,6 +122,7 @@ g6 <- function(
   if (is.null(jsonUrl)) {
     # Convert data frames to lists of records
     dat <- g6_data(nodes, edges, combos)
+    validate_edges_ports(dat[["edges"]], dat[["nodes"]])
   }
 
   # Build properly named list of parameters to pass to widget
@@ -129,7 +131,9 @@ g6 <- function(
     jsonUrl = jsonUrl,
     iconsUrl = iconsUrl,
     mode = get_g6_mode(),
-    preservePosition = get_g6_preserve_position()
+    preservePosition = get_g6_preserve_position(),
+    directed = get_g6_directed_graph(),
+    maxCollapseDepth = get_g6_max_collapse_depth()
   )
 
   # In case we need it ...
@@ -182,6 +186,64 @@ get_g6_preserve_position <- function() {
   validate_g6_preserve_position(val)
 }
 
+#' @keywords internal
+validate_g6_directed_graph <- function(val) {
+  if (!is.logical(val) || length(val) != 1) {
+    stop(
+      "`g6R.directed_graph` option must be a single logical value (TRUE or FALSE)."
+    )
+  }
+  invisible(val)
+}
+
+#' @keywords internal
+get_g6_directed_graph <- function() {
+  val <- getOption("g6R.directed_graph", FALSE)
+  validate_g6_directed_graph(val)
+}
+
+#' @keywords internal
+set_g6_directed_graph <- function(val) {
+  validate_g6_directed_graph(val)
+  options("g6R.directed_graph" = val)
+  invisible(val)
+}
+
+#' @keywords internal
+validate_g6_max_collapse_depth <- function(val) {
+  if (!is.numeric(val) || length(val) != 1 || val < -1) {
+    stop(
+      "`g6R.max_collapse_depth` option must be a single number >= -1."
+    )
+  }
+  invisible(val)
+}
+
+#' @keywords internal
+get_g6_max_collapse_depth <- function() {
+  val <- getOption("g6R.max_collapse_depth", Inf)
+  validate_g6_max_collapse_depth(val)
+}
+
+#' Set max collapse depth
+#'
+#' Controls which nodes display a collapse button based on their depth in
+#' the graph. Only nodes at depth \code{<= maxCollapseDepth} will show
+#' collapse buttons. Set to \code{Inf} (the default) to allow all nodes
+#' with children to be collapsible. Set to \code{0} to only allow root
+#' nodes to collapse. Set to \code{-1} to disable collapsing entirely.
+#'
+#' @param val A single number >= -1. Use \code{Inf} for no limit,
+#' \code{-1} to disable all collapsing.
+#'
+#' @return Invisibly returns \code{val}.
+#' @export
+set_g6_max_collapse_depth <- function(val) {
+  validate_g6_max_collapse_depth(val)
+  options("g6R.max_collapse_depth" = val)
+  invisible(val)
+}
+
 #' Shiny bindings for g6
 #'
 #' Output and render functions for using g6 within Shiny
@@ -206,13 +268,14 @@ get_g6_preserve_position <- function() {
 #'
 #' @export
 g6Output <- function(outputId, width = "100%", height = "400px") {
+  #nocov start
   htmlwidgets::shinyWidgetOutput(
     outputId,
     "g6",
     width,
     height,
     package = "g6R"
-  )
+  ) #nocov end
 }
 
 #' Alias to \link{g6Output}
@@ -223,11 +286,12 @@ g6_output <- g6Output
 #' @rdname g6-shiny
 #' @export
 renderG6 <- function(expr, env = parent.frame(), quoted = FALSE) {
+  #nocov start
   if (!quoted) {
     expr <- substitute(expr)
   } # force quoted
   htmlwidgets::shinyRenderWidget(expr, g6Output, env, quoted = TRUE)
-}
+} #nocov end
 
 #' Alias to \link{renderG6}
 #' @export
