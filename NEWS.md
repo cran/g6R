@@ -1,4 +1,32 @@
-# g6R 0.6.0.9000
+# g6R 0.6.5
+
+## New features
+
+- Bumped the bundled AntV G6 engine from 5.0.49 to 5.1.1 (with `@antv/g` 6.x and `@antv/g-svg` 2.1.1, deduplicating `g-lite` so the SVG renderer works again instead of throwing `Cannot read properties of undefined (reading 'fill')` on a blank canvas). The bump improves create-edge assist-line tracking under zoom/pan (G6 now derives the cursor position via `getCanvasByClient()`), fixes a combo/layout element-type confusion that crashed the canvas renderer when a combo was added at runtime under `g6R.layout_on_data_change` (`Cannot read properties of undefined (reading 'src')`), and pulls in upstream APIs (`hasNode()`/`hasEdge()`/`hasCombo()`, nested self-loop edges, `drag-element` trigger config). The widget bundle is now a single self-contained `g6.js` (the split `185.js` chunk was removed).
+
+- New `placement = "label-bottom"` for ports. When a node has a bottom label (e.g. `labelPlacement = "bottom"`), an output port with this placement snaps to the bottom-centre of the label background instead of the node body; it falls back to a normal bottom-of-node port when there is no label.
+
+- Default port radius increased from 4 to 6 so ports are easier to see and target.
+
+- Calmer port hover. Hovering a port no longer grows it ~2.5x into a rotating dashed `+` glyph (which read as flickering noise). Ports now keep their size and show a soft expanding ripple ring (in the port colour) only while the cursor is over them; the ripple stops when the cursor leaves. Disable it per port with `ripple = FALSE`. Ports also gain a background-coloured ring so they read as set into a small hole punched through the node / label surface (override with the `haloFill` port style), and the default fill adapts to the graph theme. The large invisible hit-area is kept, so ports remain easy to grab.
+
+- Port hover cursor is now a crosshair instead of a pointer, matching G6's native create-edge affordance ("draw an edge from here"). The crosshair and the hover ripple only appear when the graph actually has the `create_edge()` behavior, so ports don't advertise an interaction that isn't wired up.
+
+- `create_edge()` now tolerates a small miss when grabbing a port. Previously an edge only started when pointer-down landed exactly on the (small) port glyph; a near-miss on the node body fell through to `drag_element()` and moved the node instead. Pointer-down now snaps to the nearest grabbable port within a tolerance proportional to the port radius, so a slight miss still starts an edge (#50).
+
+## Bug fixes
+
+- `create_edge()`: the hidden rubber-band assist node now carries a transparent `src`, so it no longer crashes the canvas renderer with `Cannot read properties of undefined (reading 'src')` when the consumer maps every node to an image node via a fixed `node` type. The node stays hidden, so the pixel is never shown. The SVG renderer is unaffected.
+
+- Fixed `create_edge()` overwriting a consumer-supplied `drag_element()` / `drag_element_force()` `enable` predicate. While drawing an edge from a port, `create_edge()` pauses node dragging and resumes it on drop. It previously resumed by hardcoding `enable: true`, which destroyed any custom `enable` function after the first edge creation (and toggled behaviors via an array, a no-op in current G6 where `updateBehavior()` matches a single `key`). The live `enable` of each drag behavior is now snapshotted (looked up by type, so a custom `key` still works) and restored verbatim on drop (#48).
+
+- Fixed the `create_edge()` rubber-band (assist) edge not appearing while dragging when the graph had no `edge` options configured. The assist edge style read `graph.options.edge.style.zIndex`, which threw and aborted assist-edge creation; it is now read defensively and falls back to G6's default.
+
+- Fixed `create_edge()` drops being silently canceled below 100% browser zoom. The minimum drag-distance threshold was measured in canvas units, which scale with browser/graph zoom; below 100% a real drag shrank under the threshold and the drop was treated as a click. Drag intent is now measured in client (screen) pixels, which are zoom-stable (#52).
+
+- Fixed the old `+` port indicator reappearing on node selection. The legacy indicator was replaced by the hover ripple, but its shapes were still created and G6's `setVisibility()` cascade (fired on selection/update) flipped them back to visible. The dead indicator shapes (`add-inner`, `add-plus`) and their animation helpers are now removed entirely, leaving only the ripple ring.
+
+# g6R 0.6.0
 
 ## Breaking changes
 

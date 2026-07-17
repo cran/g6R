@@ -1,6 +1,6 @@
 Package: g6R
 Title: Graph Visualisation Engine Widget for R and 'shiny' Apps
-Version: 0.6.0
+Version: 0.6.5
 Authors@R: 
     c(
     person("David", "Granjon", , "dgranjon@ymail.com", role = c("aut", "cre")),
@@ -29,11 +29,11 @@ Depends: R (>= 4.1.0)
 LazyData: true
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-04-27 15:13:03 UTC; davidgranjon
+Packaged: 2026-07-17 11:56:44 UTC; davidgranjon
 Author: David Granjon [aut, cre],
   David Schoch [aut],
   cynkra GmbH [fnd],
   Bristol Myers Squibb [fnd]
 Maintainer: David Granjon <dgranjon@ymail.com>
 Repository: CRAN
-Date/Publication: 2026-04-27 15:40:02 UTC
+Date/Publication: 2026-07-17 12:50:14 UTC
